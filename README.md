@@ -46,13 +46,13 @@ npm start
 
 ## Webhook API
 
-### `POST /webhook`
+### `GET /webhook?email=<USER_EMAIL>`
 
 Called by solidarity.tech when a volunteer needs help joining Slack.
 
-**Request body:**
-```json
-{ "email": "volunteer@example.com" }
+**Example:**
+```
+GET /webhook?email=volunteer@example.com
 ```
 
 **Response:**

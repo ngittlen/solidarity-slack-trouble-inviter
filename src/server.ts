@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response } from 'express';
 import { WebClient } from '@slack/web-api';
 
 // --- Env validation ---
@@ -21,22 +21,15 @@ const PORT = parseInt(process.env['PORT'] ?? '3000', 10);
 
 const slack = new WebClient(SLACK_BOT_TOKEN);
 
-// --- Types ---
-
-interface WebhookBody {
-  email?: unknown;
-}
-
 // --- Express app ---
 
 const app = express();
-app.use(express.json());
 
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 
-app.post('/webhook', async (req: Request, res: Response) => {
+app.get('/webhook', async (req: Request, res: Response) => {
   // Auth check
   if (WEBHOOK_SECRET) {
     const authHeader = req.headers['authorization'];
@@ -46,49 +39,40 @@ app.post('/webhook', async (req: Request, res: Response) => {
     }
   }
 
-  // Validate body
-  const body = req.body as WebhookBody;
-  if (typeof body.email !== 'string' || !body.email.includes('@')) {
+  // Validate query param
+  const { email } = req.query;
+  if (typeof email !== 'string' || !email.includes('@')) {
     res.status(400).json({ error: 'Missing or invalid email' });
     return;
   }
 
-  const email = body.email.trim();
+  const trimmedEmail = email.trim();
 
   // Post to tracking channel
   try {
     await slack.chat.postMessage({
       channel: SLACK_TRACKING_CHANNEL_ID,
-      text: `Volunteer needs help joining Slack: ${email}`,
+      text: `Volunteer needs help joining Slack: ${trimmedEmail}`,
       blocks: [
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `:wave: A volunteer needs help joining Slack: \`${email}\``,
+            text: `:wave: A volunteer needs help joining Slack: \`${trimmedEmail}\``,
           },
         },
       ],
     });
-    console.log(`[webhook] posted to channel for ${email}`);
+    console.log(`[webhook] posted to channel for ${trimmedEmail}`);
   } catch (err) {
-    console.error(`[webhook] failed to post for ${email}:`, err);
+    console.error(`[webhook] failed to post for ${trimmedEmail}:`, err);
     res.status(502).json({ error: 'Failed to post to Slack' });
     return;
   }
 
-  res.json({ success: true, email });
+  res.json({ success: true, email: trimmedEmail });
 });
 
-// Handle malformed JSON from express.json()
-app.use((err: Error & { type?: string }, _req: Request, res: Response, _next: NextFunction) => {
-  if (err.type === 'entity.parse.failed') {
-    res.status(400).json({ error: 'Invalid JSON' });
-    return;
-  }
-  console.error('[server] unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
 
 app.listen(PORT, () => {
   console.log(`solidarity-slack-trouble-inviter listening on port ${PORT}`);
