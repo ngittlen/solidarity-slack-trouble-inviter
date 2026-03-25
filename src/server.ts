@@ -43,6 +43,7 @@ app.get('/webhook', async (req: Request, res: Response) => {
   const { email } = req.query;
   if (typeof email !== 'string' || !email.includes('@')) {
     res.status(400).json({ error: 'Missing or invalid email' });
+    console.log(`[webhook] error posting to channel: missing or invalid email ${email}`);
     return;
   }
 
