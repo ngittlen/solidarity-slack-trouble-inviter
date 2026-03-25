@@ -5,9 +5,9 @@ A small webhook server that receives notifications from solidarity.tech when a v
 ## How it works
 
 1. A volunteer indicates they need help joining Slack in a solidarity.tech automation
-2. The automation calls `GET /webhook?email=<volunteer_email>`
+2. The automation calls `GET /webhook?secret=<WEBHOOK_SECRET>&email=<volunteer_email>`
 3. The server stores the email in a Turso database and posts a message to a Slack channel
-4. `GET /pending` compares stored emails against current Slack workspace members and returns anyone who still hasn't joined
+4. `GET /pending?secret=<WEBHOOK_SECRET>` compares stored emails against current Slack workspace members and returns anyone who still hasn't joined
 
 ## Setup
 
@@ -44,8 +44,8 @@ SLACK_BOT_TOKEN=xoxb-your-token-here
 SLACK_TRACKING_CHANNEL_ID=C012AB3CD
 TURSO_DATABASE_URL=libsql://your-db.turso.io
 TURSO_AUTH_TOKEN=your-auth-token-here
+WEBHOOK_SECRET=your-secret-here
 PORT=3000
-WEBHOOK_SECRET=optional-secret
 ```
 
 To find your channel ID: right-click the channel in Slack → **View channel details** → scroll to the bottom.
@@ -65,18 +65,13 @@ npm start
 
 ## API
 
-### `GET /webhook?email=<USER_EMAIL>`
+### `GET /webhook?secret=<WEBHOOK_SECRET>&email=<USER_EMAIL>`
 
-Called by solidarity.tech when a volunteer needs help joining Slack. Stores the email and posts to the tracking channel.
+Called by solidarity.tech when a volunteer needs help joining Slack. Stores the email and posts to the tracking channel. Returns `401` if the secret is missing or incorrect.
 
-**Optional auth:** If `WEBHOOK_SECRET` is set, include the header:
-```
-Authorization: Bearer your-secret-here
-```
+### `GET /pending?secret=<WEBHOOK_SECRET>`
 
-### `GET /pending`
-
-Returns all email addresses that have requested help but still haven't joined the Slack workspace.
+Returns all email addresses that have requested help but still haven't joined the Slack workspace. Returns `401` if the secret is missing or incorrect.
 
 **Example response:**
 ```json
