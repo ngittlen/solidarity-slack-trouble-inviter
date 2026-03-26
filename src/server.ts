@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
-import session from 'express-session';
+import session, { Store, SessionData } from 'express-session';
 import { WebClient } from '@slack/web-api';
-import { createClient } from '@libsql/client';
+import { createClient, type Client } from '@libsql/client';
 
 // --- Env validation ---
 
@@ -46,6 +46,7 @@ const REDIRECT_URI = `${APP_URL}/auth/slack/callback`;
 declare module 'express-session' {
   interface SessionData {
     slackUserId: string;
+    oauthState: string;
   }
 }
 
@@ -72,6 +73,55 @@ const db = createClient({
   authToken: process.env['TURSO_AUTH_TOKEN']!,
 });
 
+// --- Turso session store ---
+
+class TursoStore extends Store {
+  constructor(private readonly client: Client) {
+    super();
+  }
+
+  async get(sid: string, callback: (err: unknown, session?: SessionData | null) => void) {
+    try {
+      const result = await this.client.execute({
+        sql: 'SELECT data, expires_at FROM sessions WHERE sid = ?',
+        args: [sid],
+      });
+      if (result.rows.length === 0) return callback(null, null);
+      const row = result.rows[0]!;
+      if (new Date(row['expires_at'] as string) < new Date()) {
+        await this.destroy(sid);
+        return callback(null, null);
+      }
+      callback(null, JSON.parse(row['data'] as string) as SessionData);
+    } catch (err) {
+      callback(err);
+    }
+  }
+
+  async set(sid: string, session: SessionData, callback?: (err?: unknown) => void) {
+    try {
+      const maxAge = session.cookie.maxAge ?? 8 * 60 * 60 * 1000;
+      const expiresAt = new Date(Date.now() + maxAge).toISOString();
+      await this.client.execute({
+        sql: 'INSERT OR REPLACE INTO sessions (sid, data, expires_at) VALUES (?, ?, ?)',
+        args: [sid, JSON.stringify(session), expiresAt],
+      });
+      callback?.();
+    } catch (err) {
+      callback?.(err);
+    }
+  }
+
+  async destroy(sid: string, callback?: (err?: unknown) => void) {
+    try {
+      await this.client.execute({ sql: 'DELETE FROM sessions WHERE sid = ?', args: [sid] });
+      callback?.();
+    } catch (err) {
+      callback?.(err);
+    }
+  }
+}
+
 // --- DB setup ---
 
 await db.execute(`
@@ -82,18 +132,29 @@ await db.execute(`
   )
 `);
 
+await db.execute(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    sid        TEXT PRIMARY KEY,
+    data       TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  )
+`);
+
 // --- Express app ---
 
 const app = express();
+app.set('trust proxy', 1);
 
 app.use(
   session({
+    store: new TursoStore(db),
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: APP_URL.startsWith('https'),
+      secure: process.env['NODE_ENV'] === 'production',
+      sameSite: 'lax',
       maxAge: 8 * 60 * 60 * 1000, // 8 hours
     },
   }),
@@ -128,7 +189,6 @@ app.get('/auth/slack', (req: Request, res: Response) => {
   });
 
   req.session.save(() => {
-    console.log('[auth] session saved, oauthState:', req.session.oauthState, 'session id:', req.session.id);
     res.redirect(`https://slack.com/oauth/v2/authorize?${params}`);
   });
 });
@@ -142,10 +202,6 @@ app.get('/auth/slack/callback', async (req: Request, res: Response) => {
     res.status(403).send('Access denied.');
     return;
   }
-
-  console.log('[auth] callback state received:', state);
-  console.log('[auth] callback session oauthState:', req.session.oauthState);
-  console.log('[auth] callback session id:', req.session.id);
 
   if (!code || state !== req.session.oauthState) {
     res.status(400).send('Invalid OAuth state.');
@@ -278,10 +334,3 @@ app.get('/pending', requireAuth, async (_req: Request, res: Response) => {
 app.listen(PORT, () => {
   console.log(`solidarity-slack-trouble-inviter listening on port ${PORT}`);
 });
-
-// Extend session type to include OAuth state
-declare module 'express-session' {
-  interface SessionData {
-    oauthState: string;
-  }
-}

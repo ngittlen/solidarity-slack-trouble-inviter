@@ -4,7 +4,7 @@
   "description": "Webhook server that invites volunteers to the Slack workspace on demand",
   "type": "module",
   "scripts": {
-    "dev": "npx tsx watch src/server.ts",
+    "dev": "NODE_ENV=development npx tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"
   },
