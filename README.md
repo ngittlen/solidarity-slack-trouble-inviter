@@ -5,8 +5,8 @@ A small webhook server that receives notifications from solidarity.tech when a v
 ## How it works
 
 1. A volunteer indicates they need help joining Slack in a solidarity.tech automation
-2. The automation calls `GET /webhook?secret=<WEBHOOK_SECRET>&email=<volunteer_email>`
-3. The server stores the email in a Turso database and posts a message to a Slack channel
+2. The automation calls `GET /webhook?secret=<WEBHOOK_SECRET>&email=<email>&name=<name>&phone=<phone>`
+3. The server stores the volunteer's details in a Turso database and posts a message to a Slack channel
 4. Authorised admins visit `/pending`, sign in with Slack, and see which volunteers still haven't joined
 
 ## Setup
@@ -79,19 +79,30 @@ npm start
 
 ## API
 
-### `GET /webhook?secret=<WEBHOOK_SECRET>&email=<USER_EMAIL>`
+### `GET /webhook`
 
-Called by solidarity.tech when a volunteer needs help joining Slack. Stores the email and posts to the tracking channel. Returns `401` if the secret is wrong.
+Called by solidarity.tech when a volunteer needs help joining Slack. Stores the volunteer's details and posts to the tracking channel. Returns `401` if the secret is wrong.
+
+| Parameter | Required | Description |
+|---|---|---|
+| `secret` | Yes | Must match `WEBHOOK_SECRET` |
+| `email` | Yes | Volunteer's email address |
+| `name` | No | Volunteer's full name |
+| `phone` | No | Volunteer's phone number |
+
+If the same email is submitted again, the existing record is updated with the new name, phone, and timestamp.
 
 ### `GET /pending`
 
-Protected by Slack OAuth. Redirects unauthenticated users to Sign in with Slack. Only users listed in `SLACK_ALLOWED_USER_IDS` are granted access.
+Protected by Slack OAuth. Redirects unauthenticated users to Sign in with Slack. Only users listed in `SLACK_ALLOWED_USER_IDS` are granted access. Displays a web page listing volunteers who have requested help but still haven't joined the workspace.
 
-Returns all email addresses that have requested help but still haven't joined the workspace:
+The underlying JSON is also available at `GET /api/pending`:
 
 ```json
 {
-  "pending": ["volunteer@example.com"],
+  "pending": [
+    { "email": "volunteer@example.com", "name": "Jane Smith", "phone": "555-1234" }
+  ],
   "total_requested": 5,
   "total_pending": 1
 }
@@ -112,5 +123,5 @@ Returns `{ "status": "ok" }`. Useful for uptime monitoring.
 ## Deployment
 
 [Fly.io](https://fly.io) is the recommended hosting option — install the CLI, run `fly launch` in the project directory, set the environment variables with `fly secrets set`, and deploy with `fly deploy`. Use the resulting URL as:
-- The webhook endpoint in solidarity.tech: `https://your-app.fly.dev/webhook?secret=...&email=...`
+- The webhook endpoint in solidarity.tech: `https://your-app.fly.dev/webhook?secret=...&email=...&name=...&phone=...`
 - The redirect URL in your Slack App: `https://your-app.fly.dev/auth/slack/callback`

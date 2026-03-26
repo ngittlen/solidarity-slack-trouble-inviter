@@ -360,7 +360,7 @@ app.get('/pending', requireAuth, (_req: Request, res: Response) => {
     </div>
     <div class="card">
       <div class="card-header">
-        <h2>Pending invites</h2>
+        <h2>Pending requests</h2>
         <button id="refresh-btn">Refresh</button>
       </div>
       <ul id="list"><li class="status">Loading...</li></ul>
