@@ -127,7 +127,9 @@ app.get('/auth/slack', (req: Request, res: Response) => {
     state,
   });
 
-  res.redirect(`https://slack.com/oauth/v2/authorize?${params}`);
+  req.session.save(() => {
+    res.redirect(`https://slack.com/oauth/v2/authorize?${params}`);
+  });
 });
 
 // Step 2: handle Slack OAuth callback
