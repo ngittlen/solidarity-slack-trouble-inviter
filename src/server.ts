@@ -128,6 +128,7 @@ app.get('/auth/slack', (req: Request, res: Response) => {
   });
 
   req.session.save(() => {
+    console.log('[auth] session saved, oauthState:', req.session.oauthState, 'session id:', req.session.id);
     res.redirect(`https://slack.com/oauth/v2/authorize?${params}`);
   });
 });
@@ -141,6 +142,10 @@ app.get('/auth/slack/callback', async (req: Request, res: Response) => {
     res.status(403).send('Access denied.');
     return;
   }
+
+  console.log('[auth] callback state received:', state);
+  console.log('[auth] callback session oauthState:', req.session.oauthState);
+  console.log('[auth] callback session id:', req.session.id);
 
   if (!code || state !== req.session.oauthState) {
     res.status(400).send('Invalid OAuth state.');
