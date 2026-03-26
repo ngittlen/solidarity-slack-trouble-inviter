@@ -301,8 +301,92 @@ app.get('/webhook', async (req: Request, res: Response) => {
   res.json({ success: true, email: trimmedEmail });
 });
 
-// Pending — shows volunteers who haven't joined Slack yet
-app.get('/pending', requireAuth, async (_req: Request, res: Response) => {
+// Pending — HTML page for admins
+app.get('/pending', requireAuth, (_req: Request, res: Response) => {
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slack Invite Queue</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #1a1a1a; }
+    header { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 1.1rem; font-weight: 600; }
+    header a { font-size: 0.85rem; color: #666; text-decoration: none; }
+    header a:hover { color: #1a1a1a; }
+    main { max-width: 640px; margin: 40px auto; padding: 0 24px; }
+    .stats { display: flex; gap: 16px; margin-bottom: 24px; }
+    .stat { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px 20px; flex: 1; }
+    .stat-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: 0.8rem; color: #666; margin-top: 4px; }
+    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .card-header h2 { font-size: 0.9rem; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
+    button { background: #1a1a1a; color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-size: 0.85rem; cursor: pointer; }
+    button:hover { background: #333; }
+    ul { list-style: none; }
+    li { padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.95rem; }
+    li:last-child { border-bottom: none; }
+    li a { color: #1a1a1a; text-decoration: none; }
+    li a:hover { text-decoration: underline; }
+    .empty { color: #999; font-size: 0.9rem; padding: 8px 0; }
+    .status { color: #999; font-size: 0.9rem; padding: 8px 0; }
+    .error { color: #c0392b; font-size: 0.9rem; padding: 8px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Slack Invite Queue</h1>
+    <a href="/auth/logout">Log out</a>
+  </header>
+  <main>
+    <div class="stats">
+      <div class="stat"><div class="stat-value" id="total-pending">—</div><div class="stat-label">Pending</div></div>
+      <div class="stat"><div class="stat-value" id="total-requested">—</div><div class="stat-label">Total requested</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h2>Pending invites</h2>
+        <button id="refresh-btn">Refresh</button>
+      </div>
+      <ul id="list"><li class="status">Loading...</li></ul>
+    </div>
+  </main>
+  <script>
+    async function load() {
+      const list = document.getElementById('list');
+      list.innerHTML = '<li class="status">Loading...</li>';
+      try {
+        const res = await fetch('/api/pending');
+        if (!res.ok) {
+          list.innerHTML = '<li class="error">Failed to load data. Try refreshing.</li>';
+          return;
+        }
+        const data = await res.json();
+        document.getElementById('total-pending').textContent = data.total_pending;
+        document.getElementById('total-requested').textContent = data.total_requested;
+        if (data.pending.length === 0) {
+          list.innerHTML = '<li class="empty">No pending requests.</li>';
+        } else {
+          list.innerHTML = data.pending
+            .map(email => \`<li><a href="mailto:\${email}">\${email}</a></li>\`)
+            .join('');
+        }
+      } catch (err) {
+        list.innerHTML = '<li class="error">Failed to load data. Try refreshing.</li>';
+      }
+    }
+    document.getElementById('refresh-btn').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>`);
+});
+
+// Pending API — returns JSON for the HTML page above
+app.get('/api/pending', requireAuth, async (_req: Request, res: Response) => {
   const result = await db.execute('SELECT DISTINCT email FROM requests ORDER BY email ASC');
   const requestedEmails = new Set(result.rows.map((r) => r['email'] as string));
 
