@@ -126,8 +126,10 @@ class TursoStore extends Store {
 
 await db.execute(`
   CREATE TABLE IF NOT EXISTS requests (
-    id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    email   TEXT NOT NULL,
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    email        TEXT NOT NULL UNIQUE,
+    name         TEXT,
+    phone        TEXT,
     requested_at TEXT NOT NULL
   )
 `);
@@ -263,7 +265,7 @@ app.get('/webhook', async (req: Request, res: Response) => {
     return;
   }
 
-  const { email } = req.query;
+  const { email, name, phone } = req.query;
   if (typeof email !== 'string' || !email.includes('@')) {
     res.status(400).json({ error: 'Missing or invalid email' });
     console.log(`[webhook] missing or invalid email: ${email}`);
@@ -271,11 +273,19 @@ app.get('/webhook', async (req: Request, res: Response) => {
   }
 
   const trimmedEmail = email.trim();
+  const trimmedName = typeof name === 'string' ? name.trim() || null : null;
+  const trimmedPhone = typeof phone === 'string' ? phone.trim() || null : null;
 
   await db.execute({
-    sql: 'INSERT INTO requests (email, requested_at) VALUES (?, ?)',
-    args: [trimmedEmail, new Date().toISOString()],
+    sql: 'INSERT OR REPLACE INTO requests (email, name, phone, requested_at) VALUES (?, ?, ?, ?)',
+    args: [trimmedEmail, trimmedName, trimmedPhone, new Date().toISOString()],
   });
+
+  const details = [
+    trimmedName,
+    trimmedPhone ? `📞 ${trimmedPhone}` : null,
+    `\`${trimmedEmail}\``,
+  ].filter(Boolean).join('  ·  ');
 
   try {
     await slack.chat.postMessage({
@@ -286,7 +296,7 @@ app.get('/webhook', async (req: Request, res: Response) => {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `:wave: A volunteer needs help joining Slack: \`${trimmedEmail}\``,
+            text: `:wave: A volunteer needs help joining Slack: ${details}`,
           },
         },
       ],
@@ -327,10 +337,12 @@ app.get('/pending', requireAuth, (_req: Request, res: Response) => {
     button { background: #1a1a1a; color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-size: 0.85rem; cursor: pointer; }
     button:hover { background: #333; }
     ul { list-style: none; }
-    li { padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 0.95rem; }
+    li { padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
     li:last-child { border-bottom: none; }
-    li a { color: #1a1a1a; text-decoration: none; }
-    li a:hover { text-decoration: underline; }
+    .entry-name { font-size: 0.95rem; font-weight: 500; }
+    .entry-meta { font-size: 0.8rem; color: #666; margin-top: 2px; }
+    .entry-meta a { color: #666; text-decoration: none; }
+    .entry-meta a:hover { text-decoration: underline; }
     .empty { color: #999; font-size: 0.9rem; padding: 8px 0; }
     .status { color: #999; font-size: 0.9rem; padding: 8px 0; }
     .error { color: #c0392b; font-size: 0.9rem; padding: 8px 0; }
@@ -370,9 +382,16 @@ app.get('/pending', requireAuth, (_req: Request, res: Response) => {
         if (data.pending.length === 0) {
           list.innerHTML = '<li class="empty">No pending requests.</li>';
         } else {
-          list.innerHTML = data.pending
-            .map(email => \`<li><a href="mailto:\${email}">\${email}</a></li>\`)
-            .join('');
+          list.innerHTML = data.pending.map(({ email, name, phone }) => {
+            const meta = [
+              \`<a href="mailto:\${email}">\${email}</a>\`,
+              phone ? \`<a href="tel:\${phone}">\${phone}</a>\` : null,
+            ].filter(Boolean).join('  ·  ');
+            return \`<li>
+              <div class="entry-name">\${name ?? email}</div>
+              <div class="entry-meta">\${name ? meta : (phone ? \`<a href="tel:\${phone}">\${phone}</a>\` : '')}</div>
+            </li>\`;
+          }).join('');
         }
       } catch (err) {
         list.innerHTML = '<li class="error">Failed to load data. Try refreshing.</li>';
@@ -387,13 +406,21 @@ app.get('/pending', requireAuth, (_req: Request, res: Response) => {
 
 // Pending API — returns JSON for the HTML page above
 app.get('/api/pending', requireAuth, async (_req: Request, res: Response) => {
-  const result = await db.execute('SELECT DISTINCT email FROM requests ORDER BY email ASC');
-  const requestedEmails = new Set(result.rows.map((r) => r['email'] as string));
+  const result = await db.execute(`
+    SELECT email, name, phone FROM requests ORDER BY email ASC
+  `);
 
-  if (requestedEmails.size === 0) {
-    res.json({ pending: [] });
+  if (result.rows.length === 0) {
+    res.json({ pending: [], total_requested: 0, total_pending: 0 });
     return;
   }
+
+  const requestedByEmail = new Map(
+    result.rows.map((r) => [
+      r['email'] as string,
+      { name: (r['name'] as string | null) ?? null, phone: (r['phone'] as string | null) ?? null },
+    ]),
+  );
 
   const slackEmails = new Set<string>();
   let cursor: string | undefined;
@@ -408,11 +435,11 @@ app.get('/api/pending', requireAuth, async (_req: Request, res: Response) => {
     cursor = page.response_metadata?.next_cursor;
   } while (cursor);
 
-  const pending = [...requestedEmails].filter(
-    (email) => !slackEmails.has(email.toLowerCase()),
-  );
+  const pending = [...requestedByEmail.entries()]
+    .filter(([email]) => !slackEmails.has(email.toLowerCase()))
+    .map(([email, { name, phone }]) => ({ email, name, phone }));
 
-  res.json({ pending, total_requested: requestedEmails.size, total_pending: pending.length });
+  res.json({ pending, total_requested: requestedByEmail.size, total_pending: pending.length });
 });
 
 app.listen(PORT, () => {
