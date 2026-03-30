@@ -127,9 +127,10 @@ class TursoStore extends Store {
 await db.execute(`
   CREATE TABLE IF NOT EXISTS requests (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    email        TEXT NOT NULL UNIQUE,
+    email        TEXT UNIQUE,
     name         TEXT,
     phone        TEXT,
+    comment      TEXT,
     requested_at TEXT NOT NULL
   )
 `);
@@ -146,6 +147,7 @@ await db.execute(`
 
 const app = express();
 app.set('trust proxy', 1);
+app.use(express.json());
 
 app.use(
   session({
@@ -266,15 +268,19 @@ app.get('/webhook', async (req: Request, res: Response) => {
   }
 
   const { email, name, phone } = req.query;
-  if (typeof email !== 'string' || !email.includes('@')) {
-    res.status(400).json({ error: 'Missing or invalid email' });
-    console.log(`[webhook] missing or invalid email: ${email}`);
+  const trimmedEmail = typeof email === 'string' ? email.trim() || null : null;
+  const trimmedName = typeof name === 'string' ? name.trim() || null : null;
+  const trimmedPhone = typeof phone === 'string' ? phone.trim() || null : null;
+
+  if (!trimmedEmail && !trimmedPhone) {
+    res.status(400).json({ error: 'At least one of email or phone is required' });
     return;
   }
 
-  const trimmedEmail = email.trim();
-  const trimmedName = typeof name === 'string' ? name.trim() || null : null;
-  const trimmedPhone = typeof phone === 'string' ? phone.trim() || null : null;
+  if (trimmedEmail && !trimmedEmail.includes('@')) {
+    res.status(400).json({ error: 'Invalid email address' });
+    return;
+  }
 
   await db.execute({
     sql: 'INSERT OR REPLACE INTO requests (email, name, phone, requested_at) VALUES (?, ?, ?, ?)',
@@ -284,13 +290,13 @@ app.get('/webhook', async (req: Request, res: Response) => {
   const details = [
     trimmedName,
     trimmedPhone ? `📞 ${trimmedPhone}` : null,
-    `\`${trimmedEmail}\``,
+    trimmedEmail ? `\`${trimmedEmail}\`` : null,
   ].filter(Boolean).join('  ·  ');
 
   try {
     await slack.chat.postMessage({
       channel: SLACK_TRACKING_CHANNEL_ID,
-      text: `Volunteer needs help joining Slack: ${trimmedEmail}`,
+      text: `Volunteer needs help joining Slack: ${trimmedEmail ?? trimmedPhone}`,
       blocks: [
         {
           type: 'section',
@@ -301,14 +307,14 @@ app.get('/webhook', async (req: Request, res: Response) => {
         },
       ],
     });
-    console.log(`[webhook] posted to channel for ${trimmedEmail}`);
+    console.log(`[webhook] posted to channel for ${trimmedEmail ?? trimmedPhone}`);
   } catch (err) {
-    console.error(`[webhook] failed to post for ${trimmedEmail}:`, err);
+    console.error(`[webhook] failed to post for ${trimmedEmail ?? trimmedPhone}:`, err);
     res.status(502).json({ error: 'Failed to post to Slack' });
     return;
   }
 
-  res.json({ success: true, email: trimmedEmail });
+  res.json({ success: true, email: trimmedEmail, phone: trimmedPhone });
 });
 
 // Pending — HTML page for admins
@@ -343,6 +349,12 @@ app.get('/pending', requireAuth, (_req: Request, res: Response) => {
     .entry-meta { font-size: 0.8rem; color: #666; margin-top: 2px; }
     .entry-meta a { color: #666; text-decoration: none; }
     .entry-meta a:hover { text-decoration: underline; }
+    .comment-row { display: flex; gap: 8px; margin-top: 8px; }
+    textarea { flex: 1; font-family: inherit; font-size: 0.85rem; padding: 6px 8px; border: 1px solid #e0e0e0; border-radius: 6px; resize: vertical; min-height: 36px; line-height: 1.4; color: #1a1a1a; }
+    textarea:focus { outline: none; border-color: #999; }
+    .save-btn { align-self: flex-start; background: #1a1a1a; color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+    .save-btn:hover { background: #333; }
+    .save-btn.saved { background: #27ae60; }
     .empty { color: #999; font-size: 0.9rem; padding: 8px 0; }
     .status { color: #999; font-size: 0.9rem; padding: 8px 0; }
     .error { color: #c0392b; font-size: 0.9rem; padding: 8px 0; }
@@ -382,16 +394,43 @@ app.get('/pending', requireAuth, (_req: Request, res: Response) => {
         if (data.pending.length === 0) {
           list.innerHTML = '<li class="empty">No pending requests.</li>';
         } else {
-          list.innerHTML = data.pending.map(({ email, name, phone }) => {
+          list.innerHTML = data.pending.map(({ id, email, name, phone, comment }) => {
             const meta = [
-              \`<a href="mailto:\${email}">\${email}</a>\`,
+              email ? \`<a href="mailto:\${email}">\${email}</a>\` : null,
               phone ? \`<a href="tel:\${phone}">\${phone}</a>\` : null,
             ].filter(Boolean).join('  ·  ');
-            return \`<li>
-              <div class="entry-name">\${name ?? email}</div>
-              <div class="entry-meta">\${name ? meta : (phone ? \`<a href="tel:\${phone}">\${phone}</a>\` : '')}</div>
+            return \`<li data-id="\${id}">
+              <div class="entry-name">\${name ?? email ?? phone}</div>
+              <div class="entry-meta">\${name ? meta : ''}</div>
+              <div class="comment-row">
+                <textarea placeholder="Add a comment...">\${comment ?? ''}</textarea>
+                <button class="save-btn">Save</button>
+              </div>
             </li>\`;
           }).join('');
+
+          document.querySelectorAll('.save-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const li = btn.closest('li');
+              const id = Number(li.dataset.id);
+              const comment = li.querySelector('textarea').value;
+              btn.textContent = '...';
+              btn.disabled = true;
+              try {
+                await fetch('/api/comment', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id, comment }),
+                });
+                btn.textContent = 'Saved';
+                btn.classList.add('saved');
+                setTimeout(() => { btn.textContent = 'Save'; btn.classList.remove('saved'); btn.disabled = false; }, 2000);
+              } catch {
+                btn.textContent = 'Error';
+                btn.disabled = false;
+              }
+            });
+          });
         }
       } catch (err) {
         list.innerHTML = '<li class="error">Failed to load data. Try refreshing.</li>';
@@ -407,7 +446,7 @@ app.get('/pending', requireAuth, (_req: Request, res: Response) => {
 // Pending API — returns JSON for the HTML page above
 app.get('/api/pending', requireAuth, async (_req: Request, res: Response) => {
   const result = await db.execute(`
-    SELECT email, name, phone FROM requests ORDER BY email ASC
+    SELECT id, email, name, phone, comment FROM requests ORDER BY email ASC
   `);
 
   if (result.rows.length === 0) {
@@ -415,13 +454,15 @@ app.get('/api/pending', requireAuth, async (_req: Request, res: Response) => {
     return;
   }
 
-  const requestedByEmail = new Map(
-    result.rows.map((r) => [
-      r['email'] as string,
-      { name: (r['name'] as string | null) ?? null, phone: (r['phone'] as string | null) ?? null },
-    ]),
-  );
+  const rows = result.rows.map((r) => ({
+    id: r['id'] as number,
+    email: (r['email'] as string | null) ?? null,
+    name: (r['name'] as string | null) ?? null,
+    phone: (r['phone'] as string | null) ?? null,
+    comment: (r['comment'] as string | null) ?? null,
+  }));
 
+  // Fetch Slack member emails to check who has already joined
   const slackEmails = new Set<string>();
   let cursor: string | undefined;
 
@@ -435,11 +476,25 @@ app.get('/api/pending', requireAuth, async (_req: Request, res: Response) => {
     cursor = page.response_metadata?.next_cursor;
   } while (cursor);
 
-  const pending = [...requestedByEmail.entries()]
-    .filter(([email]) => !slackEmails.has(email.toLowerCase()))
-    .map(([email, { name, phone }]) => ({ email, name, phone }));
+  // Records without an email can't be checked against Slack — always include them
+  const pending = rows.filter(({ email }) =>
+    email === null || !slackEmails.has(email.toLowerCase()),
+  );
 
-  res.json({ pending, total_requested: requestedByEmail.size, total_pending: pending.length });
+  res.json({ pending, total_requested: rows.length, total_pending: pending.length });
+});
+
+app.post('/api/comment', requireAuth, async (req: Request, res: Response) => {
+  const { id, comment } = req.body as { id?: unknown; comment?: unknown };
+  if (typeof id !== 'number' || typeof comment !== 'string') {
+    res.status(400).json({ error: 'id (number) and comment (string) are required' });
+    return;
+  }
+  await db.execute({
+    sql: 'UPDATE requests SET comment = ? WHERE id = ?',
+    args: [comment.trim() || null, id],
+  });
+  res.json({ success: true });
 });
 
 app.listen(PORT, () => {

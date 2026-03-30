@@ -86,9 +86,11 @@ Called by solidarity.tech when a volunteer needs help joining Slack. Stores the 
 | Parameter | Required | Description |
 |---|---|---|
 | `secret` | Yes | Must match `WEBHOOK_SECRET` |
-| `email` | Yes | Volunteer's email address |
+| `email` | No* | Volunteer's email address |
 | `name` | No | Volunteer's full name |
-| `phone` | No | Volunteer's phone number |
+| `phone` | No* | Volunteer's phone number |
+
+\* At least one of `email` or `phone` is required.
 
 If the same email is submitted again, the existing record is updated with the new name, phone, and timestamp.
 
@@ -101,11 +103,21 @@ The underlying JSON is also available at `GET /api/pending`:
 ```json
 {
   "pending": [
-    { "email": "volunteer@example.com", "name": "Jane Smith", "phone": "555-1234" }
+    { "id": 1, "email": "volunteer@example.com", "name": "Jane Smith", "phone": "555-1234", "comment": null }
   ],
   "total_requested": 5,
   "total_pending": 1
 }
+```
+
+Admins can add a comment to any row directly on the page. Comments are saved via `POST /api/comment`.
+
+### `POST /api/comment`
+
+Saves a comment for a request. Requires an active Slack OAuth session.
+
+```json
+{ "id": 1, "comment": "Left a voicemail, waiting to hear back." }
 ```
 
 ### `GET /auth/slack`
