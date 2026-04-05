@@ -61,7 +61,7 @@ TURSO_AUTH_TOKEN=your-auth-token-here
 WEBHOOK_SECRET=your-webhook-secret-here
 SESSION_SECRET=your-session-secret-here
 APP_URL=https://your-app.fly.dev
-PORT=3000
+PORT=3000  # defaults to 3000 in production; ignored in dev (Vite uses 5173)
 ```
 
 ### 5. Run the server
@@ -69,13 +69,29 @@ PORT=3000
 ```bash
 npm install
 
-# Development (hot reload)
+# Development (hot reload, http://localhost:5173)
 npm run dev
+
+# Run tests
+npm test
 
 # Production
 npm run build
 npm start
 ```
+
+## Local development
+
+A minimal `.env.local` for local development — no real Slack credentials needed:
+
+```
+TURSO_DATABASE_URL=file:local.db
+WEBHOOK_SECRET=any-local-secret
+SESSION_SECRET=any-local-secret
+DEV_SLACK_USER_ID=U012AB3CD
+```
+
+`file:local.db` creates a local SQLite database in the project root (no Turso account needed). `DEV_SLACK_USER_ID` bypasses Slack OAuth — visiting `/pending` automatically creates a session for that user ID. Set it to your real Slack user ID so the allowlist check passes once you wire up real credentials.
 
 ## API
 
