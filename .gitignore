@@ -9,4 +9,6 @@ build/
 *.log
 *.db
 .specify/
+.claude/
+CLAUDE.md
 specs
