@@ -61,7 +61,7 @@ TURSO_AUTH_TOKEN=your-auth-token-here
 WEBHOOK_SECRET=your-webhook-secret-here
 SESSION_SECRET=your-session-secret-here
 APP_URL=https://your-app.fly.dev
-PORT=3000
+PORT=3000  # defaults to 3000 in production; ignored in dev (Vite uses 5173)
 ```
 
 ### 5. Run the server
@@ -69,8 +69,11 @@ PORT=3000
 ```bash
 npm install
 
-# Development (hot reload)
+# Development (hot reload, http://localhost:5173)
 npm run dev
+
+# Run tests
+npm test
 
 # Production
 npm run build

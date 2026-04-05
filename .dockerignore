@@ -1,6 +1,11 @@
 node_modules/
 dist/
+build/
+.svelte-kit/
 .env.local
 .env
 *.env
 .idea
+*.log
+specs/
+docs/
