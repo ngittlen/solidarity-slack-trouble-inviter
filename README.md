@@ -150,6 +150,27 @@ Returns `{ "status": "ok" }`. Useful for uptime monitoring.
 
 ## Deployment
 
-[Fly.io](https://fly.io) is the recommended hosting option — install the CLI, run `fly launch` in the project directory, set the environment variables with `fly secrets set`, and deploy with `fly deploy`. Use the resulting URL as:
+[Fly.io](https://fly.io) is the recommended hosting option. Install the CLI, run `fly launch` in the project directory, then set secrets and deploy:
+
+```bash
+fly secrets set \
+  SLACK_BOT_TOKEN=xoxb-... \
+  SLACK_CLIENT_ID=... \
+  SLACK_CLIENT_SECRET=... \
+  SLACK_ALLOWED_USER_IDS=U012AB3CD \
+  SLACK_TRACKING_CHANNEL_ID=C012AB3CD \
+  TURSO_DATABASE_URL=libsql://your-db.turso.io \
+  TURSO_AUTH_TOKEN=... \
+  WEBHOOK_SECRET=... \
+  SESSION_SECRET=... \
+  APP_URL=https://your-app.fly.dev \
+  ORIGIN=https://your-app.fly.dev
+
+fly deploy
+```
+
+`ORIGIN` is required by SvelteKit's adapter-node for CSRF protection — it must match the public URL of your app. Set it to the same value as `APP_URL`.
+
+Use the resulting URL as:
 - The webhook endpoint in solidarity.tech: `https://your-app.fly.dev/webhook?secret=...&email=...&name=...&phone=...`
 - The redirect URL in your Slack App: `https://your-app.fly.dev/auth/slack/callback`
