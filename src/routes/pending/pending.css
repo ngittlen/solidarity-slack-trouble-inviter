@@ -184,6 +184,7 @@ th {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     padding: 10px 16px;
+    white-space: nowrap;
 }
 
 td {
@@ -224,6 +225,10 @@ tr.helped td {
     white-space: nowrap;
 }
 
+.col-phone {
+    white-space: nowrap;
+}
+
 .col-email a,
 .col-phone a {
     color: var(--color-text-muted);
@@ -237,7 +242,8 @@ tr.helped td {
 }
 
 .col-comment {
-    width: 40%;
+    width: 100%;
+    min-width: 0;
 }
 
 .col-edited-by {
