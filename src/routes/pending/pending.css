@@ -132,7 +132,7 @@ main {
 }
 
 .stats .stat:first-child .stat-value {
-    color: var(--color-coral);
+    color: var(--color-red);
 }
 
 .stats .stat:last-child .stat-value {
@@ -213,11 +213,20 @@ tr:hover td {
     width: 16px;
     height: 16px;
     cursor: pointer;
-    accent-color: var(--color-action);
+    accent-color: var(--color-blue);
 }
 
+tr.helped,
 tr.helped td {
-    opacity: 0.4;
+    color: var(--color-text-faint);
+    background-color: var(--color-border-subtle);
+}
+
+tr.helped .col-name,
+tr.helped .col-email,
+tr.helped .col-phone {
+    text-decoration: line-through;
+    text-decoration-color: var(--color-text-faint);
 }
 
 .col-name {

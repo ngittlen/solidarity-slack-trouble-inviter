@@ -254,6 +254,7 @@
 									<textarea
                                             rows="1"
                                             placeholder="Add a comment..."
+                                            aria-label="Comment for {entry.name ?? entry.email ?? entry.phone ?? 'volunteer'}"
                                             bind:value={comments[entry.id]}
                                             oninput={() => onCommentInput(entry.id)}
                                             class:unsaved={saveStatuses[entry.id] === 'pending' || saveStatuses[entry.id] === 'saving'}
