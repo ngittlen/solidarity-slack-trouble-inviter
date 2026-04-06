@@ -12,8 +12,8 @@ export async function POST({ request, locals }) {
 	}
 
 	await db.execute({
-		sql: 'UPDATE requests SET comment = ? WHERE id = ?',
-		args: [comment.trim() || null, id],
+		sql: 'UPDATE requests SET comment = ?, last_edited_by_id = ?, last_edited_by_name = ? WHERE id = ?',
+		args: [comment.trim() || null, locals.session.slackUserId, locals.session.slackUserName ?? null, id],
 	});
 
 	return json({ success: true });

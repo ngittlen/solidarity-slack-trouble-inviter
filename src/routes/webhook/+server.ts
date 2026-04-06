@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db.js';
 import { slack } from '$lib/server/slack.js';
 import { WEBHOOK_SECRET, SLACK_TRACKING_CHANNEL_ID, APP_URL } from '$lib/server/env.js';
@@ -37,24 +38,28 @@ export async function GET({ url }) {
 		.filter(Boolean)
 		.join('  ·  ');
 
-	try {
-		await slack.chat.postMessage({
-			channel: SLACK_TRACKING_CHANNEL_ID,
-			text: `Volunteer needs help joining Slack: ${trimmedEmail ?? trimmedPhone}`,
-			blocks: [
-				{
-					type: 'section',
-					text: {
-						type: 'mrkdwn',
-						text: `:wave: A volunteer needs help joining Slack: ${details}\n<${APP_URL}/pending|View pending invites>`,
+	if ((env as Record<string, string | undefined>)['DEV_SLACK_USER_ID']) {
+		console.log(`[webhook] dev mode — would post to Slack: ${details}`);
+	} else {
+		try {
+			await slack.chat.postMessage({
+				channel: SLACK_TRACKING_CHANNEL_ID,
+				text: `Volunteer needs help joining Slack: ${trimmedEmail ?? trimmedPhone}`,
+				blocks: [
+					{
+						type: 'section',
+						text: {
+							type: 'mrkdwn',
+							text: `:wave: A volunteer needs help joining Slack: ${details}\n<${APP_URL}/pending|View pending invites>`,
+						},
 					},
-				},
-			],
-		});
-		console.log(`[webhook] posted to channel for ${trimmedEmail ?? trimmedPhone}`);
-	} catch (err) {
-		console.error(`[webhook] failed to post for ${trimmedEmail ?? trimmedPhone}:`, err);
-		return json({ error: 'Failed to post to Slack' }, { status: 502 });
+				],
+			});
+			console.log(`[webhook] posted to channel for ${trimmedEmail ?? trimmedPhone}`);
+		} catch (err) {
+			console.error(`[webhook] failed to post for ${trimmedEmail ?? trimmedPhone}:`, err);
+			return json({ error: 'Failed to post to Slack' }, { status: 502 });
+		}
 	}
 
 	return json({ success: true, email: trimmedEmail, phone: trimmedPhone });

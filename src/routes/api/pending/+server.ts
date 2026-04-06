@@ -8,7 +8,8 @@ export async function GET({ locals }) {
 	}
 
 	const result = await db.execute(`
-    SELECT id, email, name, phone, comment FROM requests ORDER BY email ASC
+    SELECT id, email, name, phone, comment, helped, last_edited_by_id, last_edited_by_name
+    FROM requests ORDER BY helped ASC, email ASC
   `);
 
 	if (result.rows.length === 0) {
@@ -21,6 +22,9 @@ export async function GET({ locals }) {
 		name: (r['name'] as string | null) ?? null,
 		phone: (r['phone'] as string | null) ?? null,
 		comment: (r['comment'] as string | null) ?? null,
+		helped: Boolean(r['helped'] as number),
+		lastEditedById: (r['last_edited_by_id'] as string | null) ?? null,
+		lastEditedByName: (r['last_edited_by_name'] as string | null) ?? null,
 	}));
 
 	// Fetch Slack member emails to check who has already joined
@@ -37,10 +41,12 @@ export async function GET({ locals }) {
 		cursor = page.response_metadata?.next_cursor;
 	} while (cursor);
 
-	// Records without an email can't be checked against Slack — always include them
-	const pending = rows.filter(
-		({ email }) => email === null || !slackEmails.has(email.toLowerCase()),
-	);
+	const pending = rows.map((row) => ({
+		...row,
+		in_slack: row.email !== null && slackEmails.has(row.email.toLowerCase()),
+	}));
 
-	return json({ pending, total_requested: rows.length, total_pending: pending.length });
+	const total_pending = pending.filter((r) => !r.helped).length;
+
+	return json({ pending, total_requested: rows.length, total_pending });
 }

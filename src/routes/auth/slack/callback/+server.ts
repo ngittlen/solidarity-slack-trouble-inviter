@@ -76,7 +76,7 @@ export async function GET({ url, cookies }) {
 
 	// Create session
 	const sid = crypto.randomUUID();
-	await sessionStore.set(sid, { slackUserId: userId }, SESSION_MAX_AGE);
+	await sessionStore.set(sid, { slackUserId: userId, slackUserName: identity.user.name }, SESSION_MAX_AGE);
 
 	cookies.set('session', sid, {
 		path: '/',

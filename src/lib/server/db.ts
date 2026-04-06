@@ -3,6 +3,7 @@ import { TURSO_DATABASE_URL, TURSO_AUTH_TOKEN } from './env.js';
 
 export interface SessionData {
 	slackUserId: string;
+	slackUserName: string;
 }
 
 // Lazily initialized — created on first call to getDb() so createClient()
@@ -34,6 +35,20 @@ export async function initDbSchema(): Promise<void> {
       requested_at TEXT NOT NULL
     )
   `);
+	// Migrations for columns added after initial schema
+	const migrations = [
+		`ALTER TABLE requests ADD COLUMN helped INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE requests ADD COLUMN last_edited_by_id TEXT`,
+		`ALTER TABLE requests ADD COLUMN last_edited_by_name TEXT`,
+	];
+	for (const sql of migrations) {
+		try {
+			await client.execute(sql);
+		} catch {
+			// column already exists
+		}
+	}
+
 	await client.execute(`
     CREATE TABLE IF NOT EXISTS sessions (
       sid        TEXT PRIMARY KEY,

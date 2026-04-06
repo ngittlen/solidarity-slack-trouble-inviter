@@ -119,12 +119,14 @@ The underlying JSON is also available at `GET /api/pending`:
 ```json
 {
   "pending": [
-    { "id": 1, "email": "volunteer@example.com", "name": "Jane Smith", "phone": "555-1234", "comment": null }
+    { "id": 1, "email": "volunteer@example.com", "name": "Jane Smith", "phone": "555-1234", "comment": null, "in_slack": false }
   ],
   "total_requested": 5,
-  "total_pending": 1
+  "total_pending": 5
 }
 ```
+
+`in_slack` is `true` when the volunteer's email matches an active member in the Slack workspace.
 
 Admins can add a comment to any row directly on the page. Comments are saved via `POST /api/comment`.
 
