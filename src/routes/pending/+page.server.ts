@@ -1,6 +1,7 @@
 import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 
-export function load({ locals }) {
+export const load: PageServerLoad = ({ locals }) => {
 	if (!locals.session) {
 		throw redirect(302, '/auth/slack');
 	}

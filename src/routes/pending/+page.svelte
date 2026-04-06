@@ -28,6 +28,7 @@
     let loading = $state(true);
     let errorMessage = $state<string | null>(null);
     let data = $state<ApiResponse | null>(null);
+    let sseConnected = $state(true);
 
     let comments = $state<Record<number, string>>({});
     let saveStatuses = $state<Record<number, SaveStatus>>({});
@@ -45,8 +46,8 @@
             ? [...data.pending].sort((a, b) => {
                 const aHelped = helpedState[a.id] ?? a.helped;
                 const bHelped = helpedState[b.id] ?? b.helped;
-                if (aHelped === bHelped) return 0;
-                return aHelped ? 1 : -1;
+                if (aHelped !== bHelped) return aHelped ? 1 : -1;
+                return (a.email ?? '').localeCompare(b.email ?? '');
             })
             : []
     );
@@ -59,16 +60,9 @@
             if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
             const json: ApiResponse = await res.json();
             data = json;
-            const newComments: Record<number, string> = {};
-            const newHelped: Record<number, boolean> = {};
-            for (const entry of json.pending) {
-                newComments[entry.id] = entry.comment ?? '';
-                newHelped[entry.id] = entry.helped;
-            }
-            comments = newComments;
-            helpedState = newHelped;
+            comments = Object.fromEntries(json.pending.map((e) => [e.id, e.comment ?? '']));
+            helpedState = Object.fromEntries(json.pending.map((e) => [e.id, e.helped]));
             lastEditedByState = Object.fromEntries(json.pending.map((e) => [e.id, e.lastEditedByName]));
-            saveStatuses = {};
         } catch (err) {
             errorMessage = err instanceof Error ? err.message : 'Unknown error';
         } finally {
@@ -123,6 +117,52 @@
 
     onMount(() => {
         fetchPending();
+
+        const es = new EventSource('/api/events');
+
+        es.onopen = () => { sseConnected = true; };
+
+        es.onerror = () => {
+            sseConnected = es.readyState !== EventSource.CLOSED;
+        };
+
+        es.onmessage = (e) => {
+            try {
+                const msg = JSON.parse(e.data);
+                if (msg.type === 'new-request') {
+                    if (data) {
+                        data.pending = [...data.pending, {
+                            id: msg.id,
+                            email: msg.email,
+                            name: msg.name,
+                            phone: msg.phone,
+                            comment: null,
+                            in_slack: false,
+                            helped: false,
+                            lastEditedById: null,
+                            lastEditedByName: null,
+                        }];
+                        data.total_requested += 1;
+                        comments[msg.id] = '';
+                        helpedState[msg.id] = false;
+                        lastEditedByState[msg.id] = null;
+                    }
+                } else if (msg.type === 'helped') {
+                    helpedState[msg.id] = msg.helped;
+                    lastEditedByState[msg.id] = msg.editedBy;
+                } else if (msg.type === 'comment') {
+                    // Don't overwrite a textarea the current user is actively editing
+                    const status = saveStatuses[msg.id] ?? 'idle';
+                    if (status === 'idle') {
+                        comments[msg.id] = msg.comment ?? '';
+                        lastEditedByState[msg.id] = msg.editedBy;
+                    }
+                }
+            } catch (err) {
+                console.warn('[events] malformed SSE message:', e.data, err);
+            }
+        };
+        return () => es.close();
     });
 </script>
 
@@ -146,6 +186,10 @@
     {:else if errorMessage}
         <p class="error">{errorMessage}</p>
     {:else if data}
+        {#if !sseConnected}
+            <p class="sse-error">Live updates disconnected — changes from other users won't appear until you reload.</p>
+        {/if}
+
         <div class="toolbar">
             <div class="stats">
                 <div class="stat">
@@ -157,7 +201,6 @@
                     <span class="stat-label">Total requested</span>
                 </div>
             </div>
-            <button onclick={fetchPending}>Refresh</button>
         </div>
 
         {#if data.pending.length === 0}

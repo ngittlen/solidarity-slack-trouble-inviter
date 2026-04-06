@@ -1,8 +1,9 @@
 import { json, redirect } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db.js';
 import { slack } from '$lib/server/slack.js';
 
-export async function GET({ locals }) {
+export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.session) {
 		throw redirect(302, '/auth/slack');
 	}

@@ -1,13 +1,14 @@
 # solidarity-slack-trouble-inviter
 
-A small webhook server that receives notifications from solidarity.tech when a volunteer has trouble joining Slack, records their email, and posts it to a Slack channel so an admin can manually send them an invite. A `/pending` endpoint shows which volunteers still haven't joined, protected by Sign in with Slack.
+A small webhook server that receives notifications from solidarity.tech when a volunteer has trouble joining Slack, records their contact details, and posts a message to a Slack channel so an admin can manually send them an invite. Authorised admins visit `/pending` to see the queue, mark volunteers as helped, and leave notes — with live updates pushed to all open tabs via Server-Sent Events.
 
 ## How it works
 
 1. A volunteer indicates they need help joining Slack in a solidarity.tech automation
 2. The automation calls `GET /webhook?secret=<WEBHOOK_SECRET>&email=<email>&name=<name>&phone=<phone>`
 3. The server stores the volunteer's details in a Turso database and posts a message to a Slack channel
-4. Authorised admins visit `/pending`, sign in with Slack, and see which volunteers still haven't joined
+4. Authorised admins visit `/pending`, sign in with Slack, and see the queue update in real time
+5. Admins mark volunteers as helped and add comments; changes are reflected live for all connected users
 
 ## Setup
 
@@ -119,24 +120,54 @@ The underlying JSON is also available at `GET /api/pending`:
 ```json
 {
   "pending": [
-    { "id": 1, "email": "volunteer@example.com", "name": "Jane Smith", "phone": "555-1234", "comment": null, "in_slack": false }
+    {
+      "id": 1,
+      "email": "volunteer@example.com",
+      "name": "Jane Smith",
+      "phone": "555-1234",
+      "comment": null,
+      "in_slack": false,
+      "helped": false,
+      "lastEditedById": null,
+      "lastEditedByName": null
+    }
   ],
   "total_requested": 5,
-  "total_pending": 5
+  "total_pending": 4
 }
 ```
 
-`in_slack` is `true` when the volunteer's email matches an active member in the Slack workspace.
+- `in_slack` is `true` when the volunteer's email matches an active member in the Slack workspace.
+- `helped` is `true` when an admin has marked the volunteer as helped. Helped rows are excluded from `total_pending`.
+- `lastEditedByName` / `lastEditedById` record which admin last updated the row.
 
-Admins can add a comment to any row directly on the page. Comments are saved via `POST /api/comment`.
+Admins can add a comment or mark a row as helped directly on the page. Changes are saved automatically and pushed live to all connected users via Server-Sent Events (`GET /api/events`).
 
 ### `POST /api/comment`
 
-Saves a comment for a request. Requires an active Slack OAuth session.
+Saves a comment for a request. Requires an active Slack OAuth session. Passing a blank string clears the comment.
 
 ```json
 { "id": 1, "comment": "Left a voicemail, waiting to hear back." }
 ```
+
+### `POST /api/helped`
+
+Marks or unmarks a request as helped. Requires an active Slack OAuth session.
+
+```json
+{ "id": 1, "helped": true }
+```
+
+### `GET /api/events`
+
+Server-Sent Events stream. Requires an active Slack OAuth session. Pushes three event types:
+
+| `type` | Payload | Meaning |
+|---|---|---|
+| `new-request` | `id, email, name, phone` | A new volunteer record was created |
+| `helped` | `id, helped, editedBy` | A row's helped status changed |
+| `comment` | `id, comment, editedBy` | A row's comment changed |
 
 ### `GET /auth/slack`
 

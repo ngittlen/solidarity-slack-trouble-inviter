@@ -1,10 +1,12 @@
 import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db.js';
 import { slack } from '$lib/server/slack.js';
 import { WEBHOOK_SECRET, SLACK_TRACKING_CHANNEL_ID, APP_URL } from '$lib/server/env.js';
+import { notifyNewRequest } from '$lib/server/events.js';
 
-export async function GET({ url }) {
+export const GET: RequestHandler = async ({ url }) => {
 	if (url.searchParams.get('secret') !== WEBHOOK_SECRET) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
@@ -25,9 +27,16 @@ export async function GET({ url }) {
 		return json({ error: 'Invalid email address' }, { status: 400 });
 	}
 
-	await db.execute({
+	const result = await db.execute({
 		sql: 'INSERT OR REPLACE INTO requests (email, name, phone, requested_at) VALUES (?, ?, ?, ?)',
 		args: [trimmedEmail, trimmedName, trimmedPhone, new Date().toISOString()],
+	});
+
+	notifyNewRequest({
+		id: Number(result.lastInsertRowid),
+		email: trimmedEmail,
+		name: trimmedName,
+		phone: trimmedPhone,
 	});
 
 	const details = [
@@ -57,7 +66,7 @@ export async function GET({ url }) {
 			});
 			console.log(`[webhook] posted to channel for ${trimmedEmail ?? trimmedPhone}`);
 		} catch (err) {
-			console.error(`[webhook] failed to post for ${trimmedEmail ?? trimmedPhone}:`, err);
+			console.error(`[webhook] failed to post for ${trimmedEmail ?? trimmedPhone}:`, err instanceof Error ? err.message : err);
 			return json({ error: 'Failed to post to Slack' }, { status: 502 });
 		}
 	}

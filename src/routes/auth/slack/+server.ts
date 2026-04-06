@@ -1,10 +1,11 @@
 import { redirect } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import { SLACK_CLIENT_ID, REDIRECT_URI } from '$lib/server/env.js';
 import { env } from '$env/dynamic/private';
 
 const OAUTH_STATE_COOKIE = 'oauth_state';
 
-export async function GET({ cookies }) {
+export const GET: RequestHandler = async ({ cookies }) => {
 	if ((env as Record<string, string | undefined>)['DEV_SLACK_USER_ID']) {
 		redirect(302, '/auth/dev-login');
 	}

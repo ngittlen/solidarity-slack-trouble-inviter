@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from './+server.js';
 
 const mockExecute = vi.hoisted(() => vi.fn());
+const mockNotifyComment = vi.hoisted(() => vi.fn());
+
 vi.mock('$lib/server/db', () => ({ db: { execute: mockExecute } }));
+vi.mock('$lib/server/events', () => ({ notifyComment: mockNotifyComment }));
 
 // --- Helpers ---
 
-const authed = { locals: { session: { slackUserId: 'U123' } } };
+const authed = {
+	locals: { session: { slackUserId: 'U123', slackUserName: 'Alice' } },
+};
 const unauthed = { locals: { session: null } };
 
 function makeEvent(session: typeof authed | typeof unauthed, body: unknown) {
@@ -58,7 +63,24 @@ describe('POST /api/comment', () => {
 	it('stores null when comment is blank whitespace', async () => {
 		await POST(makeEvent(authed, { id: 5, comment: '   ' }) as never);
 		expect(mockExecute).toHaveBeenCalledWith(
-			expect.objectContaining({ args: [null, 5] }),
+			expect.objectContaining({ args: expect.arrayContaining([null, 5]) }),
 		);
+	});
+
+	it('saves the editor name and id', async () => {
+		await POST(makeEvent(authed, { id: 5, comment: 'called' }) as never);
+		expect(mockExecute).toHaveBeenCalledWith(
+			expect.objectContaining({ args: expect.arrayContaining(['U123', 'Alice']) }),
+		);
+	});
+
+	it('notifies subscribers after saving', async () => {
+		await POST(makeEvent(authed, { id: 5, comment: 'called' }) as never);
+		expect(mockNotifyComment).toHaveBeenCalledWith(5, 'called', 'Alice');
+	});
+
+	it('notifies with null when comment is blank', async () => {
+		await POST(makeEvent(authed, { id: 5, comment: '   ' }) as never);
+		expect(mockNotifyComment).toHaveBeenCalledWith(5, null, 'Alice');
 	});
 });

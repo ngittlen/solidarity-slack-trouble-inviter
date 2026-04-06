@@ -12,6 +12,8 @@ vi.mock('$lib/server/env', () => ({
 	SLACK_TRACKING_CHANNEL_ID: 'C_TEST',
 	APP_URL: 'http://localhost',
 }));
+vi.mock('$lib/server/events', () => ({ notifyNewRequest: vi.fn() }));
+vi.mock('$env/dynamic/private', () => ({ env: {} }));
 
 // --- Helpers ---
 
@@ -26,7 +28,7 @@ function makeEvent(params: Record<string, string>) {
 describe('GET /webhook', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockExecute.mockResolvedValue({});
+		mockExecute.mockResolvedValue({ lastInsertRowid: 1n });
 		mockPostMessage.mockResolvedValue({ ok: true });
 	});
 
@@ -62,7 +64,7 @@ describe('GET /webhook', () => {
 
 	it('persists the record before posting to Slack', async () => {
 		const order: string[] = [];
-		mockExecute.mockImplementation(async () => { order.push('db'); });
+		mockExecute.mockImplementation(async () => { order.push('db'); return { lastInsertRowid: 1n }; });
 		mockPostMessage.mockImplementation(async () => { order.push('slack'); return { ok: true }; });
 
 		await GET(makeEvent({ secret: 'secret123', email: 'a@b.com' }) as never);

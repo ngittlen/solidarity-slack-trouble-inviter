@@ -1,4 +1,5 @@
 import { redirect, error } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 import crypto from 'crypto';
 import { sessionStore } from '$lib/server/db.js';
 import {
@@ -22,7 +23,7 @@ interface SlackIdentityResponse {
 
 const SESSION_MAX_AGE = 8 * 60 * 60;
 
-export async function GET({ url, cookies }) {
+export const GET: RequestHandler = async ({ url, cookies }) => {
 	const errorParam = url.searchParams.get('error');
 	if (errorParam) {
 		console.error('[auth] Slack OAuth error:', errorParam);
