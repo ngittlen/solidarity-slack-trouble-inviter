@@ -1,6 +1,7 @@
 <script lang="ts">
     import {onMount} from 'svelte';
     import './pending.css';
+    import { parsePhoneNumberWithError } from 'libphonenumber-js';
 
     const {data: pageData} = $props();
 
@@ -111,6 +112,15 @@
         });
     }
 
+    function formatPhone(phone: string): string {
+        try {
+            const parsed = parsePhoneNumberWithError(phone, 'US');
+            return parsed.formatNational();
+        } catch {
+            return phone;
+        }
+    }
+
     onMount(() => {
         fetchPending();
     });
@@ -192,7 +202,7 @@
                             </td>
                             <td class="col-phone">
                                 {#if entry.phone}
-                                    <a href="tel:{entry.phone}">{entry.phone}</a>
+                                    <a href="tel:{entry.phone}">{formatPhone(entry.phone)}</a>
                                 {:else}
                                     —
                                 {/if}
