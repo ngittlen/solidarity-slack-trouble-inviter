@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for solidarity-slack-trouble-inviter on 2026-03-25T06:04:19Z
+# fly.toml app configuration file generated for slack-solidarity-helper-tools on 2026-03-25T06:04:19Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'solidarity-slack-trouble-inviter'
+app = 'slack-solidarity-helper-tools'
 primary_region = 'ord'
 
 [build]

@@ -1,4 +1,4 @@
-# solidarity-slack-trouble-inviter
+# slack-solidarity-helper-tools
 
 A small webhook server that receives notifications from solidarity.tech when a volunteer has trouble joining Slack, records their contact details, and posts a message to a Slack channel so an admin can manually send them an invite. Authorised admins visit `/pending` to see the queue, mark volunteers as helped, and leave notes — with live updates pushed to all open tabs via Server-Sent Events.
 
