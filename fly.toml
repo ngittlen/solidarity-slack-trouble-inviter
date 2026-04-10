@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for slack-solidarity-helper-tools on 2026-03-25T06:04:19Z
+# fly.toml app configuration file generated for slack-solidarity-helper-tools on 2026-04-10T01:17:42Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -17,6 +17,7 @@ primary_region = 'ord'
   processes = ['app']
 
 [[vm]]
-  memory = '512mb'
+  memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
